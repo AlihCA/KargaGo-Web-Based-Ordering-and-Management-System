@@ -31,6 +31,23 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
+const upsertUserFromOrder = async (connection, customer) => {
+  const clerkUserId = customer.clerk_user_id || customer.id;
+  const firstName = customer.first_name || customer.firstName || null;
+  const lastName = customer.last_name || customer.lastName || null;
+
+  const query = `
+    INSERT INTO users (clerk_user_id, email, first_name, last_name)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      email = VALUES(email),
+      first_name = VALUES(first_name),
+      last_name = VALUES(last_name)
+  `;
+
+  await connection.query(query, [clerkUserId, customer.email, firstName, lastName]);
+};
+
 // Test connection
 (async () => {
   try {
@@ -110,6 +127,8 @@ app.post("/orders", async (req, res) => {
   
   try {
     await connection.beginTransaction();
+
+    await upsertUserFromOrder(connection, customer);
 
     const orderQuery = `
       INSERT INTO orders 
