@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { ProductCard } from "../components/ProductCard";
 import { Filter } from "lucide-react";
+import { buildApiUrl } from "../utils/api";
 
 export interface Products {
   id: number;
@@ -18,7 +19,7 @@ export function MenuPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   useEffect(() => {
-    fetch("http://localhost:5000/products")
+    fetch(buildApiUrl("/products"))
       .then((res) => res.json())
       .then((data) => {
         console.log(data);
