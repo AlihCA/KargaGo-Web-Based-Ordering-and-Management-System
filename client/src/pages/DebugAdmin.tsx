@@ -1,5 +1,6 @@
 import { useUser, useAuth } from '@clerk/clerk-react'; // ✅ Added useAuth
 import { useEffect, useState } from 'react';
+import { buildApiUrl } from '../utils/api';
 
 // Temporary component to debug the admin auth issue
 export function DebugAdmin() {
@@ -17,7 +18,7 @@ export function DebugAdmin() {
         console.log('🔑 Token obtained:', token?.substring(0, 20) + '...');
 
         // Test 2: Try to call admin endpoint
-        const response = await fetch('http://localhost:5000/api/admin/stats', {
+        const response = await fetch(buildApiUrl('/api/admin/stats'), {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'

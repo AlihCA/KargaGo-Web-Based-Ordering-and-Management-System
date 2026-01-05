@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useCart } from "../contexts/CartContext";
 import { useUser } from "@clerk/clerk-react";
 import { CreditCard, CheckCircle } from "lucide-react";
+import { buildApiUrl } from "../utils/api";
 
 
 export function CheckoutPage() {
@@ -28,7 +29,7 @@ export function CheckoutPage() {
     setProcessing(true);
 
     try {
-      const response = await fetch("http://localhost:5000/orders", {
+      const response = await fetch(buildApiUrl("/orders"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

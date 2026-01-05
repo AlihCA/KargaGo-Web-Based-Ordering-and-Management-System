@@ -7,7 +7,16 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-app.use(cors());
+const allowedOrigins = process.env.CLIENT_ORIGIN
+  ? process.env.CLIENT_ORIGIN.split(",").map((origin) => origin.trim())
+  : ["http://localhost:5173", "http://localhost:3000"];
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 app.use(express.json());
 
 // 🔗 Connect to local MySQL (using promise-based connection)
@@ -39,7 +48,8 @@ const pool = mysql.createPool({
 
 // Admin middleware to check if user has admin role
 const requireAdmin = (req, res, next) => {
-  const role = req.auth.sessionClaims?.publicMetadata?.role;
+  const role = req.auth?.sessionClaims?.publicMetadata?.role
+    || req.auth?.sessionClaims?.privateMetadata?.role;
   
   if (role !== 'admin') {
     return res.status(403).json({ error: 'Forbidden: Admin access required' });

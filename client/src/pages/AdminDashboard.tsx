@@ -1,6 +1,7 @@
 import { useUser, useAuth } from '@clerk/clerk-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { buildApiUrl, parseApiError } from '../utils/api';
 
 interface Product {
   id: number;
@@ -35,9 +36,35 @@ const AdminDashboard = () => {
   const { getToken } = useAuth();
 
   const getAuthToken = async (): Promise<string> => {
-  const token = await getToken();
-  if (!token) throw new Error('No auth token');
-  return token;};
+    const token = await getToken();
+    if (!token) throw new Error('Please sign in again.');
+    return token;
+  };
+
+  const fetchWithAuth = async (path: string, options: RequestInit = {}) => {
+    const token = await getAuthToken();
+    const response = await fetch(buildApiUrl(path), {
+      ...options,
+      headers: {
+        ...(options.headers ?? {}),
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    if (response.status === 401) {
+      throw new Error('Session expired. Please sign in again.');
+    }
+    if (response.status === 403) {
+      throw new Error('Admin access required.');
+    }
+
+    if (!response.ok) {
+      const message = await parseApiError(response, 'Request failed.');
+      throw new Error(message);
+    }
+
+    return response;
+  };
 
   const navigate = useNavigate();
   
@@ -73,8 +100,7 @@ const AdminDashboard = () => {
   
   const fetchData = async () => {
     try {
-      const token = await getAuthToken();
-      await Promise.all([fetchProducts(token), fetchOrders(token), fetchStats(token)]);
+      await Promise.all([fetchProducts(), fetchOrders(), fetchStats()]);
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
@@ -82,29 +108,20 @@ const AdminDashboard = () => {
     }
   };
 
-  const fetchProducts = async (token: string | undefined) => {
-    const response = await fetch('http://localhost:5000/products', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!response.ok) throw new Error('Failed to fetch products');
+  const fetchProducts = async () => {
+    const response = await fetchWithAuth('/products');
     const data = await response.json();
     setProducts(data);
   };
 
-  const fetchOrders = async (token: string | undefined) => {
-    const response = await fetch('http://localhost:5000/api/admin/orders', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!response.ok) throw new Error('Failed to fetch orders');
+  const fetchOrders = async () => {
+    const response = await fetchWithAuth('/api/admin/orders');
     const data = await response.json();
     setOrders(data);
   };
 
-  const fetchStats = async (token: string | undefined) => {
-    const response = await fetch('http://localhost:5000/api/admin/stats', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!response.ok) throw new Error('Failed to fetch stats');
+  const fetchStats = async () => {
+    const response = await fetchWithAuth('/api/admin/stats');
     const data = await response.json();
     setStats(data);
   };
@@ -113,17 +130,15 @@ const AdminDashboard = () => {
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = await getAuthToken();
-      const response = await fetch('http://localhost:5000/api/admin/products', {
+      const response = await fetchWithAuth('/api/admin/products', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(productForm)
       });
-      if (!response.ok) throw new Error('Failed to create product');
-      await fetchProducts(token);
+      await response.json().catch(() => null);
+      await fetchProducts();
       resetProductForm();
       alert('Product created successfully!');
     } catch (err) {
@@ -135,17 +150,15 @@ const AdminDashboard = () => {
     e.preventDefault();
     if (!editingProduct) return;
     try {
-      const token = await getAuthToken();
-      const response = await fetch(`http://localhost:5000/api/admin/products/${editingProduct.id}`, {
+      const response = await fetchWithAuth(`/api/admin/products/${editingProduct.id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(productForm)
       });
-      if (!response.ok) throw new Error('Failed to update product');
-      await fetchProducts(token);
+      await response.json().catch(() => null);
+      await fetchProducts();
       resetProductForm();
       alert('Product updated successfully!');
     } catch (err) {
@@ -156,13 +169,11 @@ const AdminDashboard = () => {
   const handleDeleteProduct = async (productId: number) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
     try {
-      const token = await getAuthToken();
-      const response = await fetch(`http://localhost:5000/api/admin/products/${productId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+      const response = await fetchWithAuth(`/api/admin/products/${productId}`, {
+        method: 'DELETE'
       });
-      if (!response.ok) throw new Error('Failed to delete product');
-      await fetchProducts(token);
+      await response.json().catch(() => null);
+      await fetchProducts();
       alert('Product deleted successfully!');
     } catch (err) {
       alert('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
@@ -191,17 +202,15 @@ const AdminDashboard = () => {
   // Order operations
   const handleUpdateOrderStatus = async (orderId: number, newStatus: string) => {
     try {
-      const token = await getAuthToken();
-      const response = await fetch(`http://localhost:5000/api/admin/orders/${orderId}/status`, {
+      const response = await fetchWithAuth(`/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ status: newStatus })
       });
-      if (!response.ok) throw new Error('Failed to update order status');
-      await fetchOrders(token);
+      await response.json().catch(() => null);
+      await fetchOrders();
       alert('Order status updated!');
     } catch (err) {
       alert('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
