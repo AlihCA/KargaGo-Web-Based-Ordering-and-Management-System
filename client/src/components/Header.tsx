@@ -7,10 +7,13 @@ import {
 } from "@clerk/clerk-react";
 import { Truck, ShoppingCart } from "lucide-react";
 import { useCart } from "../contexts/CartContext";
+import { useAdminMode } from "../contexts/AdminModeContext";
 
 export function Header() {
-  const { isSignedIn } = useUser();
+  const { isSignedIn, user } = useUser();
   const { totalItems } = useCart();
+  const { adminMode, toggleAdminMode } = useAdminMode();
+  const isAdmin = user?.publicMetadata?.role === "admin";
 
   return (
     <header className="bg-stone-900 text-white shadow-lg sticky top-0 z-50">
@@ -37,6 +40,14 @@ export function Header() {
             >
               Menu
             </Link>
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className="hover:text-amber-400 transition-colors font-medium"
+              >
+                Admin
+              </Link>
+            )}
             <Link
               to="/cart"
               className="hover:text-amber-400 transition-colors font-medium relative"
@@ -54,6 +65,25 @@ export function Header() {
           </nav>
 
           <div className="flex items-center gap-4">
+            {isAdmin && (
+              <label className="flex items-center gap-2 text-xs uppercase tracking-wide text-stone-300">
+                <span>Admin Mode</span>
+                <button
+                  type="button"
+                  onClick={toggleAdminMode}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                    adminMode ? "bg-amber-500" : "bg-stone-600"
+                  }`}
+                  aria-pressed={adminMode}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                      adminMode ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </label>
+            )}
             {isSignedIn ? (
               <UserButton afterSignOutUrl="/" />
             ) : (
@@ -80,6 +110,11 @@ export function Header() {
           <Link to="/menu" className="hover:text-amber-400 transition-colors">
             Menu
           </Link>
+          {isAdmin && (
+            <Link to="/admin" className="hover:text-amber-400 transition-colors">
+              Admin
+            </Link>
+          )}
           <Link
             to="/cart"
             className="hover:text-amber-400 transition-colors relative"
