@@ -48,14 +48,25 @@ const pool = mysql.createPool({
 
 // Admin middleware to check if user has admin role
 const requireAdmin = (req, res, next) => {
-  const role = req.auth?.sessionClaims?.publicMetadata?.role
-    || req.auth?.sessionClaims?.privateMetadata?.role;
-  
-  if (role !== 'admin') {
-    return res.status(403).json({ error: 'Forbidden: Admin access required' });
+  const claims = req.auth?.sessionClaims;
+
+  const role =
+    claims?.metadata?.role ||
+    claims?.privateMetadata?.role ||
+    claims?.publicMetadata?.role;
+
+  console.log("🔍 Clerk session claims:", claims);
+  console.log("🔐 role resolved:", role);
+
+  if (role !== "admin") {
+    return res.status(403).json({
+      error: "Forbidden: Admin access required",
+      debug: { roleFound: role ?? null }
+    });
   }
-  
-  next();
+
+  return next();
+
 };
 
 // =======================

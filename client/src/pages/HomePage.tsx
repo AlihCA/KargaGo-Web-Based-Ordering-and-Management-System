@@ -7,7 +7,7 @@ export function HomePage() {
   return (
     <div className="min-h-screen w-full bg-black">
       <section
-        className="relative h-[650px] bg-cover bg-center flex flex-col justify-between"
+        className="relative h-[550px] bg-cover bg-center flex flex-col justify-between"
         style={{ backgroundImage: `url(${HeroBG})` }}
       >
         <div className="absolute inset-0 bg-black/5"></div>

@@ -111,7 +111,14 @@ const AdminDashboard = () => {
   const fetchProducts = async () => {
     const response = await fetchWithAuth('/products');
     const data = await response.json();
-    setProducts(data);
+
+    const normalized = (Array.isArray(data) ? data : []).map((p: any) => ({
+      ...p,
+      price: Number(p.price),   // ✅ convert string/decimal to number
+      stock: Number(p.stock),
+    }));
+
+    setProducts(normalized);
   };
 
   const fetchOrders = async () => {
