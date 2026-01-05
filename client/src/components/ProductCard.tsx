@@ -1,6 +1,8 @@
 import { ShoppingCart } from "lucide-react";
-import { useCart } from "../contexts/CartContext";
 import { useNavigate } from "react-router-dom";
+import { useUser } from "@clerk/clerk-react";
+import { useCart } from "../contexts/CartContext";
+import { useAdminMode } from "../contexts/AdminModeContext";
 import type { Products } from "../pages/MenuPage";
 
 interface ProductCardProps {
@@ -10,6 +12,10 @@ interface ProductCardProps {
 export function ProductCard({ product }: ProductCardProps) {
   const { addToCart } = useCart();
   const navigate = useNavigate();
+  const { user } = useUser();
+  const { adminMode } = useAdminMode();
+  const isAdmin = user?.publicMetadata?.role === "admin";
+  const showAdminActions = isAdmin && adminMode;
 
   const handleAddToCart = () => {
     addToCart(product);
@@ -24,6 +30,22 @@ export function ProductCard({ product }: ProductCardProps) {
           alt={product.name}
           className="w-full h-full object-cover"
         />
+        {showAdminActions && (
+          <div className="absolute top-3 right-3 flex gap-2">
+            <button
+              type="button"
+              className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-stone-900 shadow-sm hover:bg-white"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              className="rounded-full bg-red-500/90 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-red-500"
+            >
+              Delete
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="p-6">
