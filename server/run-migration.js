@@ -11,12 +11,15 @@ async function runMigrations() {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    port: process.env.DB_PORT,
+    port: Number(process.env.DB_PORT),
     multipleStatements: true,
   });
  
   const migrationsDir = "./migrations";
-  const files = fs.readdirSync(migrationsDir).sort();
+  const files = fs
+    .readdirSync(migrationsDir)
+    .filter((file) => /^\d+_.*\.sql$/.test(file))
+    .sort();
 
   for (const file of files) {
     if (file.endsWith(".sql")) {
@@ -39,5 +42,3 @@ if (command === "status") {
   // Default: run migrations
   runMigrations().catch(console.error);
 }
-
-runMigrations().catch(console.error);
