@@ -33,11 +33,11 @@ export function HomePage() {
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/90 backdrop-blur">
               <Sparkles className="h-4 w-4 text-amber-400" />
-              <span>Philippine goods delivered with care — COD available</span>
+              <span>Philippine goods delivered with care</span>
             </div>
 
             <h1 className="mt-6 text-4xl md:text-6xl font-extrabold leading-tight">
-              Carrying Home Filipino Treasures <span className="text-amber-400">closer</span> To Your Door Step.
+              Carrying <span className="text-amber-400">Philippines</span>  Closer To Your Door Step.
             </h1>
 
             <p className="mt-5 text-base md:text-lg text-white/80 leading-relaxed">
