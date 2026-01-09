@@ -2,7 +2,7 @@
 import { Link } from "react-router-dom";
 import { Star, ArrowRight, Truck, ShieldCheck, Globe2, Sparkles } from "lucide-react";
 import HeroBG from "../assets/hero-bg.png";
-import Product from "../assets/product.jpg";
+import sari from "../assets/sari-sari-store-2.jpg";
 
 const RatingStars = ({ value = 5 }: { value?: number }) => (
   <div className="flex items-center gap-0.5 text-amber-400">
@@ -103,7 +103,7 @@ export function HomePage() {
             <div className="relative">
               <div className="absolute -inset-4 rounded-3xl bg-amber-600/10 blur-2xl" />
               <img
-                src={Product}
+                src={sari}
                 alt="KargaGo featured products"
                 className="relative w-full max-w-[520px] mx-auto rounded-2xl shadow-2xl shadow-black/40 border border-white/10"
               />

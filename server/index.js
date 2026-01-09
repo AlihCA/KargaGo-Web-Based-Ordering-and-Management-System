@@ -3,7 +3,6 @@ import mysql from "mysql2/promise";
 import cors from "cors";
 import { ClerkExpressRequireAuth, clerkClient } from '@clerk/clerk-sdk-node';
 import dotenv from "dotenv";
-import cors from "cors";
 
 dotenv.config();
 
@@ -664,10 +663,6 @@ app.use((req, res) => {
     path: req.originalUrl,
   });
 });
-
-app.use(cors({
-  origin: "*", 
-}));
 
 
 // =======================
