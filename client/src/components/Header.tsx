@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+// components/Header.tsx
+import { Link, useLocation } from "react-router-dom";
 import {
   SignInButton,
   SignUpButton,
@@ -14,6 +15,28 @@ export function Header() {
   const { totalItems } = useCart();
   const { adminMode, toggleAdminMode } = useAdminMode();
   const isAdmin = user?.publicMetadata?.role === "admin";
+  const location = useLocation();
+
+  // "Active" helper (supports exact routes and nested routes)
+  const isActive = (path: string) => {
+    const current = location.pathname;
+    if (path === "/") return current === "/";
+    return current === path || current.startsWith(`${path}/`);
+  };
+
+  const navLinkClass = (path: string) =>
+    [
+      "relative font-medium transition-colors",
+      isActive(path)
+        ? "text-amber-400"
+        : "text-white hover:text-amber-400",
+    ].join(" ");
+
+  const mobileLinkClass = (path: string) =>
+    [
+      "transition-colors font-medium",
+      isActive(path) ? "text-amber-400" : "hover:text-amber-400",
+    ].join(" ");
 
   return (
     <header className="bg-stone-900 text-white shadow-lg sticky top-0 z-50">
@@ -27,54 +50,60 @@ export function Header() {
             <span>KargaGo</span>
           </Link>
 
+          {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-8">
-            <Link
-              to="/"
-              className="hover:text-amber-400 transition-colors font-medium"
-            >
+            <Link to="/" className={navLinkClass("/")}>
               Home
+              {isActive("/") && (
+                <span className="absolute -bottom-2 left-0 h-0.5 w-full bg-amber-400 rounded-full" />
+              )}
             </Link>
-             {isAdmin && (
-              <Link
-                to="/admin"
-                className="hover:text-amber-400 transition-colors font-medium"
-              >
+
+            <Link to="/menu" className={navLinkClass("/menu")}>
+              Menu
+              {isActive("/menu") && (
+                <span className="absolute -bottom-2 left-0 h-0.5 w-full bg-amber-400 rounded-full" />
+              )}
+            </Link>
+
+            <Link to="/orders" className={navLinkClass("/orders")}>
+              My Orders
+              {isActive("/orders") && (
+                <span className="absolute -bottom-2 left-0 h-0.5 w-full bg-amber-400 rounded-full" />
+              )}
+            </Link>
+
+            {isAdmin && (
+              <Link to="/admin" className={navLinkClass("/admin")}>
                 Admin
+                {isActive("/admin") && (
+                  <span className="absolute -bottom-2 left-0 h-0.5 w-full bg-amber-400 rounded-full" />
+                )}
               </Link>
             )}
-            <Link
-              to="/menu"
-              className="hover:text-amber-400 transition-colors font-medium"
-            >
-              Menu
-            </Link>
-           
-            <Link
-            to="/orders"
-            className="hover:text-amber-400 transition-colors font-medium"
-          >
-            My Orders
-          </Link>
 
-            <Link
-              to="/cart"
-              className="hover:text-amber-400 transition-colors font-medium relative"
-            >
+            <Link to="/cart" className={`${navLinkClass("/cart")} relative`}>
               <div className="flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5" />
                 <span>Cart</span>
+
                 {totalItems > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  <span className="absolute -top-2 -right-3 bg-amber-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
                     {totalItems}
                   </span>
                 )}
               </div>
+
+              {isActive("/cart") && (
+                <span className="absolute -bottom-2 left-0 h-0.5 w-full bg-amber-400 rounded-full" />
+              )}
             </Link>
           </nav>
 
+          {/* Right side */}
           <div className="flex items-center gap-4">
             {isAdmin && (
-              <label className="flex items-center gap-2 text-xs uppercase tracking-wide text-stone-300">
+              <label className="hidden sm:flex items-center gap-2 text-xs uppercase tracking-wide text-stone-300">
                 <span>Admin Mode</span>
                 <button
                   type="button"
@@ -92,6 +121,7 @@ export function Header() {
                 </button>
               </label>
             )}
+
             {isSignedIn ? (
               <UserButton afterSignOutUrl="/" />
             ) : (
@@ -111,22 +141,27 @@ export function Header() {
           </div>
         </div>
 
+        {/* Mobile nav */}
         <nav className="md:hidden flex items-center justify-around mt-4 pt-4 border-t border-stone-700">
-          <Link to="/" className="hover:text-amber-400 transition-colors">
+          <Link to="/" className={mobileLinkClass("/")}>
             Home
           </Link>
-          <Link to="/menu" className="hover:text-amber-400 transition-colors">
+
+          <Link to="/menu" className={mobileLinkClass("/menu")}>
             Menu
           </Link>
+
+          <Link to="/orders" className={mobileLinkClass("/orders")}>
+            Orders
+          </Link>
+
           {isAdmin && (
-            <Link to="/admin" className="hover:text-amber-400 transition-colors">
+            <Link to="/admin" className={mobileLinkClass("/admin")}>
               Admin
             </Link>
           )}
-          <Link
-            to="/cart"
-            className="hover:text-amber-400 transition-colors relative"
-          >
+
+          <Link to="/cart" className={`${mobileLinkClass("/cart")} relative`}>
             <div className="flex items-center gap-1">
               <ShoppingCart className="w-4 h-4" />
               <span>Cart</span>
