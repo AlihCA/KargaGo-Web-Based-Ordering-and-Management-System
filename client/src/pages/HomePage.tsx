@@ -1,8 +1,8 @@
 // pages/HomePage.tsx
 import { Link } from "react-router-dom";
 import { Star, ArrowRight, Truck, ShieldCheck, Globe2, Sparkles } from "lucide-react";
-import HeroBG from "../assets/bg.png";
-import Product from "../assets/bg2.jpg";
+import HeroBG from "../assets/hero-bg.png";
+import Product from "../assets/product.jpg";
 
 const RatingStars = ({ value = 5 }: { value?: number }) => (
   <div className="flex items-center gap-0.5 text-amber-400">
@@ -17,7 +17,7 @@ export function HomePage() {
     <div className="min-h-screen w-full bg-black text-white">
       {/* HERO */}
       <section
-        className="relative overflow-hidden"
+        className="relative h-[650px] bg-cover bg-center flex flex-col justify-between"
         style={{ backgroundImage: `url(${HeroBG})` }}
       >
         {/* Background image layer */}
