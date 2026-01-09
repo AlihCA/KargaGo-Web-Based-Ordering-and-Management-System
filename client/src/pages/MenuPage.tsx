@@ -10,8 +10,10 @@ export interface Products {
   category: string;
   description: string;
   image_url: string;
+  stock: number;
   in_stock: boolean;
 }
+
 
 export function MenuPage() {
   const [products, setProducts] = useState<Products[]>([]);
@@ -19,29 +21,39 @@ export function MenuPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   useEffect(() => {
-    fetch(buildApiUrl("/products"))
-      .then((res) => res.json())
-      .then((data) => {
-        console.log(data);
-        // Check what property contains the array
-        // If the response is { products: [...] }
-        setProducts(data.products || data || []);
-        setLoading(false);
-      })
-      .catch((error) => {
-        console.error("Error fetching products:", error);
-        setProducts([]); // Set empty array on error
-        setLoading(false);
-      });
-  }, []);
+  fetch(buildApiUrl("/products"))
+    .then((res) => res.json())
+    .then((data) => {
+      const list = data?.products ?? data ?? [];
+      const normalized = (Array.isArray(list) ? list : []).map((p: any) => ({
+        ...p,
+        price: Number(p.price),
+        stock: Number(p.stock),
+        in_stock: Boolean(p.in_stock) && Number(p.stock) > 0,
+      }));
 
-  const categories = [
-    { value: "all", label: "All Items" },
-    { value: "snacks", label: "Snacks" },
-    { value: "agricultural", label: "Agricultural" },
-    { value: "organic", label: "Organic" },
-    { value: "regionalSpecialty", label: "Regional Specialty" },
-  ];
+      setProducts(normalized);
+      setLoading(false);
+    })
+    .catch((error) => {
+      console.error("Error fetching products:", error);
+      setProducts([]);
+      setLoading(false);
+    });
+}, []);
+
+    const categories = [
+      { value: "all", label: "All Items" },
+      ...Array.from(new Set(products.map((p) => p.category)))
+        .filter(Boolean)
+        .map((cat) => ({
+          value: cat,
+          label: cat
+            .replace(/([A-Z])/g, " $1")
+            .replace(/^./, (s) => s.toUpperCase()),
+        })),
+    ];
+
 
   const filteredProducts =
     selectedCategory === "all"

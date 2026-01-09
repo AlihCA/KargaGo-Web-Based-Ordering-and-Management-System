@@ -1,18 +1,23 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../contexts/CartContext";
-import { useUser } from "@clerk/clerk-react";
-import { CreditCard, CheckCircle } from "lucide-react";
-import { buildApiUrl } from "../utils/api";
-
+import { useUser, useAuth } from "@clerk/clerk-react";
+import { CheckCircle, Truck } from "lucide-react";
+import { buildApiUrl, parseApiError } from "../utils/api";
 
 export function CheckoutPage() {
   const { cart, totalPrice, clearCart } = useCart();
   const { user } = useUser();
+  const { getToken } = useAuth();
   const navigate = useNavigate();
+
   const [processing, setProcessing] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
   const [address, setAddress] = useState("");
+
+  const taxAmount = totalPrice * 0.08;
+  const totalWithTax = totalPrice + taxAmount;
+
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -21,7 +26,7 @@ export function CheckoutPage() {
       return;
     }
 
-    if (!address) {
+    if (!address.trim()) {
       alert("Please enter your address");
       return;
     }
@@ -29,36 +34,36 @@ export function CheckoutPage() {
     setProcessing(true);
 
     try {
+      const token = await getToken();
+      if (!token) throw new Error("Session expired. Please sign in again.");
+
       const response = await fetch(buildApiUrl("/orders"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          customer: {
-            id: user.id,
-            email: user.emailAddresses[0]?.emailAddress,
-            address,
-          },
+          // ✅ Keep payload minimal — backend should trust auth, not these fields
           items: cart,
-          totalPrice,
-          paymentMethod: "paypal",
+          address,
+          paymentMethod: "cod",
         }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || "Order failed");
+        const msg = await parseApiError(response, "Order failed");
+        throw new Error(msg);
       }
+
+      await response.json().catch(() => null);
 
       setOrderComplete(true);
       clearCart();
-
       setTimeout(() => navigate("/"), 3000);
     } catch (err) {
       console.error(err);
-      alert("Failed to place order");
+      alert(err instanceof Error ? err.message : "Failed to place order");
     } finally {
       setProcessing(false);
     }
@@ -74,19 +79,14 @@ export function CheckoutPage() {
               Order Confirmed!
             </h2>
             <p className="text-stone-600 mb-6">
-              Thank you for your order. We're preparing your items now!
+              Thank you for your order. We&apos;re preparing your items now!
             </p>
-            <p className="text-sm text-stone-500">
-              Redirecting to home page...
-            </p>
+            <p className="text-sm text-stone-500">Redirecting to home page...</p>
           </div>
         </div>
       </div>
     );
   }
-
-  const taxAmount = totalPrice * 0.08;
-  const totalWithTax = totalPrice + taxAmount;
 
   return (
     <div className="min-h-screen bg-stone-50 py-12">
@@ -134,59 +134,16 @@ export function CheckoutPage() {
 
               <div>
                 <h2 className="text-2xl font-bold text-stone-900 mb-4">
-                  Payment Information
+                  Payment Method
                 </h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-stone-700 mb-1">
-                      Card Number
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="1234 5678 9012 3456"
-                        required
-                        className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                      />
-                      <CreditCard className="absolute right-3 top-2.5 w-5 h-5 text-stone-400" />
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">
-                        Expiry Date
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="MM/YY"
-                        required
-                        className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">
-                        CVV
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="123"
-                        required
-                        className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-
+                <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 flex gap-3 items-start">
+                  <Truck className="w-6 h-6 text-amber-600 mt-0.5" />
                   <div>
-                    <label className="block text-sm font-medium text-stone-700 mb-1">
-                      Cardholder Name
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="John Doe"
-                      required
-                      className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    />
+                    <p className="font-semibold text-stone-900">Cash on Delivery (COD)</p>
+                    <p className="text-sm text-stone-600">
+                      Pay when your order arrives. Please prepare the exact amount if possible.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -197,8 +154,8 @@ export function CheckoutPage() {
                 className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-4 rounded-lg transition-all duration-200 hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {processing
-                  ? "Processing..."
-                  : `Pay $${totalWithTax.toFixed(2)}`}
+                  ? "Placing order..."
+                  : `Place Order (COD)`}
               </button>
             </form>
           </div>
@@ -216,7 +173,7 @@ export function CheckoutPage() {
                       {item.name} x {item.quantity}
                     </span>
                     <span className="font-medium">
-                      ${(item.price * item.quantity).toFixed(2)}
+                      ₱{(item.price * item.quantity).toFixed(2)}
                     </span>
                   </div>
                 ))}
@@ -225,19 +182,23 @@ export function CheckoutPage() {
               <div className="border-t border-stone-200 pt-4 space-y-3">
                 <div className="flex justify-between text-stone-600">
                   <span>Subtotal</span>
-                  <span>${totalPrice.toFixed(2)}</span>
+                  <span>₱{totalPrice.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-stone-600">
                   <span>Tax (8%)</span>
-                  <span>${taxAmount.toFixed(2)}</span>
+                  <span>₱{taxAmount.toFixed(2)}</span>
                 </div>
                 <div className="border-t border-stone-200 pt-3">
                   <div className="flex justify-between text-xl font-bold text-stone-900">
                     <span>Total</span>
-                    <span>${totalWithTax.toFixed(2)}</span>
+                    <span>: Place Order (₱{totalWithTax.toFixed(2)})</span>
                   </div>
                 </div>
               </div>
+
+              <p className="text-xs text-stone-500 mt-4">
+                You will pay upon delivery.
+              </p>
             </div>
           </div>
         </div>

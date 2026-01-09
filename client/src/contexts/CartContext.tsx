@@ -27,16 +27,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       const fixedProduct = {
         ...product,
-        price: Number(product.price), // ✅ FIX HERE
+        price: Number(product.price), 
       };
 
       if (existingItem) {
+        if (existingItem.quantity >= Number(existingItem.stock)) {
+          return prevCart;
+        }
+
         return prevCart.map((item) =>
           item.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
+
 
       return [...prevCart, { ...fixedProduct, quantity: 1 }];
     });
@@ -47,13 +52,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const updateQuantity = (productId: number, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    setCart((prev) =>
-      prev.map((item) => (item.id === productId ? { ...item, quantity } : item))
-    );
+    setCart((prev) => {
+      const item = prev.find((it) => it.id === productId);
+      if (!item) return prev;
+
+      if (quantity <= 0) {
+        return prev.filter((it) => it.id !== productId);
+      }
+
+      const max = Number(item.stock);
+      const nextQty = Math.min(quantity, Number.isFinite(max) ? max : quantity);
+
+      return prev.map((it) =>
+        it.id === productId ? { ...it, quantity: nextQty } : it
+      );
+    });
   };
 
   const clearCart = () => setCart([]);

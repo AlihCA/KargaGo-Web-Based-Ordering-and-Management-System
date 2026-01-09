@@ -9,7 +9,9 @@ import { MenuPage } from "./pages/MenuPage";
 import { CartPage } from "./pages/CartPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
 import AdminDashboard from "./pages/AdminDashboard";
-import { DebugAdmin } from "./pages/DebugAdmin";
+import { SyncUserToDb } from "./components/SyncUserToDb";
+import { OrdersPage } from "./pages/OrdersPage";
+
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -47,6 +49,7 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
   return (
     <ClerkProvider publishableKey={clerkPubKey}>
+      <SyncUserToDb />
       <AdminModeProvider>
         <CartProvider>
           <BrowserRouter>
@@ -57,8 +60,6 @@ function App() {
                   {/* Public Routes */}
                   <Route path="/" element={<HomePage />} />
                   <Route path="/menu" element={<MenuPage />} />
-
-                  <Route path="/debug-admin" element={<DebugAdmin />} />
                   
                   {/* Protected Routes (require login) */}
                   <Route
@@ -92,6 +93,9 @@ function App() {
                   
                   {/* Catch all - redirect to home */}
                   <Route path="*" element={<Navigate to="/" replace />} />
+
+                  <Route path="/orders" element={<OrdersPage />} />
+
                 </Routes>
               </main>
               <Footer />

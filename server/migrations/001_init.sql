@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS products (
   in_stock BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_category (category),
-  INDEX idx_in_stock (in_stock)
+  INDEX idx_in_stock (in_stock),
+  UNIQUE KEY uniq_products_name (name)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS orders (

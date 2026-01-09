@@ -34,13 +34,7 @@ export function Header() {
             >
               Home
             </Link>
-            <Link
-              to="/menu"
-              className="hover:text-amber-400 transition-colors font-medium"
-            >
-              Menu
-            </Link>
-            {isAdmin && (
+             {isAdmin && (
               <Link
                 to="/admin"
                 className="hover:text-amber-400 transition-colors font-medium"
@@ -48,6 +42,20 @@ export function Header() {
                 Admin
               </Link>
             )}
+            <Link
+              to="/menu"
+              className="hover:text-amber-400 transition-colors font-medium"
+            >
+              Menu
+            </Link>
+           
+            <Link
+            to="/orders"
+            className="hover:text-amber-400 transition-colors font-medium"
+          >
+            My Orders
+          </Link>
+
             <Link
               to="/cart"
               className="hover:text-amber-400 transition-colors font-medium relative"

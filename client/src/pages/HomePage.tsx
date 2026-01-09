@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Star } from "lucide-react";
 import HeroBG from "../assets/bg.png";
-import Splash1 from "../assets/bg2.jpg";
+import Product from "../assets/bg2.jpg";
 
 export function HomePage() {
   return (
@@ -32,7 +32,7 @@ export function HomePage() {
 
       <section className="bg-gradient-to-b from-black to-stone-900 py-24 px-6 md:px-16 text-white">
         <div className="grid md:grid-cols-2 gap-10 items-center">
-          <img src={Splash1} className="w-[320px] mx-auto" />
+          <img src={Product} className="w-[320px] mx-auto" />
 
           <div>
             <h3 className="text-amber-400 uppercase tracking-widest mb-2">
@@ -56,19 +56,19 @@ export function HomePage() {
 
         <div className="flex items-center justify-center gap-10 flex-wrap">
           <div className="bg-stone-900 rounded-xl p-5 w-[280px] shadow-lg">
-            <img src="public/products/mangoes.jpg" className="rounded-xl mb-4" />
+            <img src="/products/mangoes.jpg" className="rounded-xl mb-4" />
             <h3 className="text-xl font-bold">Mangoes</h3>
             <p className="text-amber-400 mt-1"></p>
           </div>
 
           <div className="bg-stone-900 rounded-xl p-5 w-[280px] shadow-lg">
-            <img src="public/products/pastillas.jpg" className="rounded-xl mb-4" />
+            <img src="/products/pastillas.jpg" className="rounded-xl mb-4" />
             <h3 className="text-xl font-bold">Pastillas</h3>
             <p className="text-amber-400 mt-1"></p>
           </div>
 
           <div className="bg-stone-900 rounded-xl p-5 w-[280px] shadow-lg">
-            <img src="public/products/ube-in-a-jar.jpg" className="rounded-xl mb-4" />
+            <img src="/products/ube-in-a-jar.jpg" className="rounded-xl mb-4" />
             <h3 className="text-xl font-bold">Fila Manila Ube</h3>
             <p className="text-amber-400 mt-1"></p>
           </div>

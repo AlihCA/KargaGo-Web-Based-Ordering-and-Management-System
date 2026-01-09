@@ -1,7 +1,7 @@
 import express from "express";
 import mysql from "mysql2/promise";
 import cors from "cors";
-import { ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
+import { ClerkExpressRequireAuth, clerkClient } from '@clerk/clerk-sdk-node';
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -18,6 +18,52 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 app.use(express.json());
+
+app.post("/api/me/sync", ClerkExpressRequireAuth(), async (req, res) => {
+  try {
+    const clerkUserId = req.auth?.userId;
+    if (!clerkUserId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // ✅ Always reliable: fetch user from Clerk
+    const clerkUser = await clerkClient.users.getUser(clerkUserId);
+
+    const email =
+      clerkUser.emailAddresses?.find((e) => e.id === clerkUser.primaryEmailAddressId)
+        ?.emailAddress ||
+      clerkUser.emailAddresses?.[0]?.emailAddress ||
+      null;
+
+    if (!email) {
+      return res.status(400).json({ error: "User has no email address" });
+    }
+
+    // Role from Clerk metadata (falls back to "user")
+    const role =
+      clerkUser.publicMetadata?.role ||
+      clerkUser.privateMetadata?.role ||
+      "user";
+
+    await pool.query(
+      `
+      INSERT INTO users (clerk_user_id, email, role, last_login)
+      VALUES (?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE
+        email = VALUES(email),
+        role = VALUES(role),
+        last_login = NOW()
+      `,
+      [clerkUserId, email, role === "admin" ? "admin" : "user"]
+    );
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("❌ /api/me/sync error:", err);
+    return res.status(500).json({ error: "Failed to sync user" });
+  }
+});
+
 
 // 🔗 Connect to local MySQL (using promise-based connection)
 const pool = mysql.createPool({
@@ -69,21 +115,17 @@ const requireAdmin = (req, res, next) => {
 
   const role =
     claims?.metadata?.role ||
+    claims?.publicMetadata?.role ||
     claims?.privateMetadata?.role ||
-    claims?.publicMetadata?.role;
-
-  console.log("🔍 Clerk session claims:", claims);
-  console.log("🔐 role resolved:", role);
+    null;
 
   if (role !== "admin") {
     return res.status(403).json({
       error: "Forbidden: Admin access required",
-      debug: { roleFound: role ?? null }
     });
   }
 
-  return next();
-
+  next();
 };
 
 // =======================
@@ -116,67 +158,252 @@ app.get("/products/:id", async (req, res) => {
 });
 
 // POST ORDERS
-app.post("/orders", async (req, res) => {
-  const { customer, items, totalPrice, paymentMethod, address } = req.body;
+// POST ORDERS (Authenticated)
+app.post("/orders", ClerkExpressRequireAuth(), async (req, res) => {
+  const { items, paymentMethod, address } = req.body;
 
-  if (!items || items.length === 0) {
+  // Only COD for now
+  const normalizedPayment = String(paymentMethod || "cod").toLowerCase();
+  if (normalizedPayment !== "cod") {
+    return res.status(400).json({ error: "Invalid payment method" });
+  }
+
+  if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "Cart is empty" });
   }
 
+  if (!address || typeof address !== "string" || !address.trim()) {
+    return res.status(400).json({ error: "Address is required" });
+  }
+
+  const clerkUserId = req.auth?.userId;
+  if (!clerkUserId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  // ✅ Email: try session claims first, then fallback to Clerk API
+  let email = null;
+  const claims = req.auth?.sessionClaims || {};
+  email =
+    claims?.email ||
+    claims?.primary_email ||
+    claims?.primaryEmail ||
+    claims?.user?.email ||
+    null;
+
+  if (!email) {
+    try {
+      const clerkUser = await clerkClient.users.getUser(clerkUserId);
+      const primaryEmailId = clerkUser.primaryEmailAddressId;
+      email =
+        clerkUser.emailAddresses?.find((e) => e.id === primaryEmailId)
+          ?.emailAddress ||
+        clerkUser.emailAddresses?.[0]?.emailAddress ||
+        null;
+    } catch (e) {
+      console.error("❌ Clerk getUser failed:", e);
+    }
+  }
+
+  if (!email) {
+    return res.status(400).json({ error: "Email not available for this user" });
+  }
+
+  // Normalize item shape (accept {id, quantity} OR {product_id, quantity})
+  const normalizedItems = items.map((it) => ({
+    productId: Number(it?.id ?? it?.product_id),
+    quantity: Number(it?.quantity),
+  }));
+
+  if (normalizedItems.some((it) => !Number.isFinite(it.productId) || it.productId <= 0)) {
+    return res.status(400).json({ error: "Invalid product id in cart" });
+  }
+  if (normalizedItems.some((it) => !Number.isFinite(it.quantity) || it.quantity <= 0)) {
+    return res.status(400).json({ error: "Invalid quantity in cart" });
+  }
+
+  // Merge duplicates: if same product appears multiple times, add quantities
+  const merged = new Map();
+  for (const it of normalizedItems) {
+    merged.set(it.productId, (merged.get(it.productId) || 0) + it.quantity);
+  }
+  const productIds = Array.from(merged.keys());
+
   const connection = await pool.getConnection();
-  
+
   try {
     await connection.beginTransaction();
 
-    await upsertUserFromOrder(connection, customer);
+    // Upsert user record
+    await connection.query(
+      `
+        INSERT INTO users (clerk_user_id, email)
+        VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE email = VALUES(email)
+      `,
+      [clerkUserId, email]
+    );
 
-    const orderQuery = `
-      INSERT INTO orders 
-      (user_id, user_email, total_amount, status, address, payment_method)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `;
+    // Lock product rows FOR UPDATE so stock can't be oversold
+    const placeholders = productIds.map(() => "?").join(",");
+    const [rows] = await connection.query(
+      `
+        SELECT id, price, stock
+        FROM products
+        WHERE id IN (${placeholders})
+        FOR UPDATE
+      `,
+      productIds
+    );
 
-    const [result] = await connection.query(
-      orderQuery,
+    const productMap = new Map(rows.map((p) => [Number(p.id), p]));
+
+    // Validate each product exists + has enough stock
+    for (const [pid, qty] of merged.entries()) {
+      const p = productMap.get(pid);
+      if (!p) {
+        await connection.rollback();
+        return res.status(400).json({ error: `Invalid product: ${pid}` });
+      }
+
+      const stock = Number(p.stock);
+      if (!Number.isFinite(stock) || stock < qty) {
+        await connection.rollback();
+        return res.status(400).json({
+          error: `Insufficient stock for product ${pid}. Available: ${stock}, requested: ${qty}`,
+        });
+      }
+    }
+
+    // Compute total (server-trusted)
+    let subtotal = 0;
+    const orderItemValues = [];
+
+    for (const [pid, qty] of merged.entries()) {
+      const p = productMap.get(pid);
+      const price = Number(p.price);
+      subtotal += price * qty;
+
+      orderItemValues.push({
+        productId: pid,
+        quantity: qty,
+        price,
+      });
+    }
+
+    // If you want to include tax in stored total:
+    const TAX_RATE = 0.08;
+    const totalAmount = Math.round(subtotal * (1 + TAX_RATE) * 100) / 100;
+
+    // Insert order
+    const [orderResult] = await connection.query(
+      `
+        INSERT INTO orders
+        (user_id, user_email, total_amount, status, address, payment_method)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `,
       [
-        customer.clerk_user_id || customer.id,
-        customer.email,
-        totalPrice,
+        clerkUserId,
+        email,
+        totalAmount,
         "pending",
-        address || customer.address,
-        paymentMethod,
+        address.trim(),
+        "cod",
       ]
     );
 
-    const orderId = result.insertId;
+    const orderId = orderResult.insertId;
 
-    const itemQuery = `
-      INSERT INTO order_items 
-      (order_id, product_id, quantity, price)
-      VALUES ?
-    `;
-
-    const values = items.map((item) => [
+    // Insert items
+    const values = orderItemValues.map((it) => [
       orderId,
-      item.id,
-      item.quantity,
-      item.price,
+      it.productId,
+      it.quantity,
+      it.price,
     ]);
 
-    await connection.query(itemQuery, [values]);
-    
+    await connection.query(
+      `
+        INSERT INTO order_items
+        (order_id, product_id, quantity, price)
+        VALUES ?
+      `,
+      [values]
+    );
+
+    // Deduct stock
+    for (const it of orderItemValues) {
+      await connection.query(
+        `
+          UPDATE products
+          SET stock = stock - ?
+          WHERE id = ?
+        `,
+        [it.quantity, it.productId]
+      );
+    }
+
     await connection.commit();
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "✅ Order created",
       orderId,
+      email,
+      subtotal: Math.round(subtotal * 100) / 100,
+      taxRate: TAX_RATE,
+      totalAmount,
+      status: "pending",
+      paymentMethod: "cod",
     });
   } catch (err) {
     await connection.rollback();
     console.error("❌ Order error:", err);
-    res.status(500).json({ error: 'Failed to create order' });
+    return res.status(500).json({ error: "Failed to create order" });
   } finally {
     connection.release();
+  }
+});
+
+
+app.get("/api/orders/me", ClerkExpressRequireAuth(), async (req, res) => {
+  try {
+    const clerkUserId = req.auth?.userId;
+    if (!clerkUserId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const [orders] = await pool.query(
+      `
+      SELECT
+        o.id,
+        o.total_amount,
+        o.status,
+        o.payment_method,
+        o.address,
+        o.created_at,
+        JSON_ARRAYAGG(
+          JSON_OBJECT(
+            'product_id', oi.product_id,
+            'quantity', oi.quantity,
+            'price', oi.price,
+            'name', p.name,
+            'image_url', p.image_url
+          )
+        ) AS items
+      FROM orders o
+      JOIN order_items oi ON oi.order_id = o.id
+      JOIN products p ON p.id = oi.product_id
+      WHERE o.user_id = ?
+      GROUP BY o.id
+      ORDER BY o.created_at DESC
+      `,
+      [clerkUserId]
+    );
+
+    res.json({ orders });
+  } catch (err) {
+    console.error("❌ Fetch user orders error:", err);
+    res.status(500).json({ error: "Failed to fetch orders" });
   }
 });
 
@@ -333,21 +560,29 @@ app.get("/api/admin/orders", ClerkExpressRequireAuth(), requireAdmin, async (req
       GROUP BY o.id
       ORDER BY o.created_at DESC
     `);
-    
-    res.json(rows);
+
+    const normalized = rows.map((o) => ({
+      ...o,
+      total_amount: Number(o.total_amount) || 0,
+      item_count: Number(o.item_count) || 0,
+    }));
+
+    res.json(normalized);
   } catch (error) {
-    console.error('Error fetching orders:', error);
-    res.status(500).json({ error: 'Failed to fetch orders' });
+    console.error("Error fetching orders:", error);
+    res.status(500).json({ error: "Failed to fetch orders" });
   }
 });
+
 
 // Update order status (Admin only)
 app.patch("/api/admin/orders/:orderId/status", ClerkExpressRequireAuth(), requireAdmin, async (req, res) => {
   const { orderId } = req.params;
-  const { status } = req.body;
+  const rawStatus = req.body?.status;
+  const status = typeof rawStatus === "string" ? rawStatus.toLowerCase() : "";
 
-  const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
-  
+  const validStatuses = ["pending", "processing", "shipped", "delivered", "completed", "cancelled"];
+
   if (!status || !validStatuses.includes(status)) {
     return res.status(400).json({ 
       error: 'Invalid status. Must be one of: ' + validStatuses.join(', ') 
@@ -378,33 +613,27 @@ app.patch("/api/admin/orders/:orderId/status", ClerkExpressRequireAuth(), requir
 // Get admin statistics (Admin only)
 app.get("/api/admin/stats", ClerkExpressRequireAuth(), requireAdmin, async (req, res) => {
   try {
-    // Total products
-    const [productsResult] = await pool.query('SELECT COUNT(*) as count FROM products');
-    const totalProducts = productsResult[0].count;
+    const [productsResult] = await pool.query("SELECT COUNT(*) as count FROM products");
+    const totalProducts = Number(productsResult[0].count) || 0;
 
-    // Total orders
-    const [ordersResult] = await pool.query('SELECT COUNT(*) as count FROM orders');
-    const totalOrders = ordersResult[0].count;
+    const [ordersResult] = await pool.query("SELECT COUNT(*) as count FROM orders");
+    const totalOrders = Number(ordersResult[0].count) || 0;
 
-    // Total revenue
-    const [revenueResult] = await pool.query('SELECT SUM(total_amount) as total FROM orders');
-    const totalRevenue = revenueResult[0].total || 0;
+    const [revenueResult] = await pool.query("SELECT SUM(total_amount) as total FROM orders");
+    const totalRevenue = Number(revenueResult[0].total) || 0; // ✅ convert to number
 
-    // Pending orders
-    const [pendingResult] = await pool.query(
-      "SELECT COUNT(*) as count FROM orders WHERE status = 'pending'"
-    );
-    const pendingOrders = pendingResult[0].count;
+    const [pendingResult] = await pool.query("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'");
+    const pendingOrders = Number(pendingResult[0].count) || 0;
 
     res.json({
       totalProducts,
       totalOrders,
-      totalRevenue,
-      pendingOrders
+      totalRevenue,   
+      pendingOrders,
     });
   } catch (error) {
-    console.error('Error fetching stats:', error);
-    res.status(500).json({ error: 'Failed to fetch statistics' });
+    console.error("Error fetching stats:", error);
+    res.status(500).json({ error: "Failed to fetch statistics" });
   }
 });
 
@@ -428,9 +657,18 @@ app.use((err, req, res, next) => {
   });
 });
 
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Route not found",
+    path: req.originalUrl,
+  });
+});
+
+
 // =======================
 // START SERVER
 // =======================
+
 app.listen(5000, () => {
   console.log("🚀 Server running on http://localhost:5000");
 });
